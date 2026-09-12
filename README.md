@@ -94,10 +94,12 @@ python -m rag.ingest          # sincroniza N8N → pgvector (incremental)
 python -m rag.query_engine "Consultor senior en transformación digital"
 ```
 
-### Instalación como paquete (para el dashboard u otros proyectos)
+### Instalación como paquete (para otros proyectos)
 
 Este repo se puede instalar directamente con pip (usa `pyproject.toml`, no necesita
-clonarse aparte):
+clonarse aparte) si en algún momento otro proyecto necesita importar `rag.query_engine`
+sin clonar este repo. `app.py` (sección siguiente) **no** usa este mecanismo — al vivir
+en el mismo repo, importa `rag` directamente:
 
 ```bash
 pip install git+https://github.com/eapazminoSTI/proyecto-mia-rag-module.git@master
@@ -127,6 +129,23 @@ Los tests no requieren N8N, Postgres ni OpenAI: cubren `_latest_matches_by_pair`
 (la normalización de los dos schemas de `resultados_match`, ver §4) usando las
 fixtures reales en `tests/fixtures/`.
 
+### Interfaz Streamlit (`app.py`)
+
+App de una sola página para hacer consultas sin usar el CLI. Vive en este mismo
+repo — importa `rag.query_engine` directamente (import local, no instala nada vía
+pip) — y no depende del dashboard del proyecto original ni de ninguna otra carpeta.
+
+```bash
+pip install -r requirements-app.txt
+streamlit run app.py
+# Abre en http://localhost:8501
+```
+
+Sin `N8N_API_KEY`/`DATABASE_URL`/`OPENAI_API_KEY` configuradas (`.env` en la raíz de
+este repo), la app muestra qué variables faltan y no ofrece un formulario — no tiene
+modo demo, igual que `rag.query_engine`: sin un índice real poblado no hay resultados
+de similitud que simular.
+
 ## 7. Estructura del repositorio
 
 ```
@@ -135,6 +154,8 @@ proyecto-mia-rag-module/
 ├── .gitignore
 ├── pyproject.toml       # Empaquetado (pip install git+...)
 ├── requirements-dev.txt
+├── requirements-app.txt # Dependencias de app.py (rag/requirements.txt + streamlit)
+├── app.py               # Interfaz Streamlit de una sola página (independiente)
 ├── rag/
 │   ├── schema.sql          # Bootstrap: CREATE EXTENSION vector
 │   ├── config.py           # Env vars (N8N_URL, DATABASE_URL, OPENAI_API_KEY, ...)
@@ -159,8 +180,9 @@ proyecto-mia-rag-module/
 - El caso `top_10_matches` (schema anidado) en `test_n8n_reader.py` es sintético — no se
   capturó una muestra real de ese campo durante el debugging original, solo de
   `todos_los_resultados`. Si aparece un caso real, reemplazar el fixture sintético.
-- Sin interfaz de consulta más allá del CLI (`python -m rag.query_engine`); una página nueva
-  en el dashboard Streamlit del proyecto original sería la extensión natural.
+- `app.py` es independiente a propósito (no está integrada al dashboard del proyecto
+  original) para no mezclar el historial de git de ambos repos — ver nota en la
+  cabecera de este README.
 
 ## Referencias
 
