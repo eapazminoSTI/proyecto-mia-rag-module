@@ -97,12 +97,24 @@ python -m rag.query_engine "Consultor senior en transformación digital"
 `rag/schema.sql` solo habilita la extensión `pgvector` (`CREATE EXTENSION IF NOT EXISTS vector`) —
 las tablas del vector store y del docstore las crea LlamaIndex automáticamente en el primer `ingest`.
 
+### Tests
+
+```bash
+pip install -r requirements-dev.txt
+pytest tests/
+```
+
+Los tests no requieren N8N, Postgres ni OpenAI: cubren `_latest_matches_by_pair`
+(la normalización de los dos schemas de `resultados_match`, ver §4) usando las
+fixtures reales en `tests/fixtures/`.
+
 ## 7. Estructura del repositorio
 
 ```
 proyecto-mia-rag-module/
 ├── README.md
 ├── .gitignore
+├── requirements-dev.txt
 ├── rag/
 │   ├── schema.sql          # Bootstrap: CREATE EXTENSION vector
 │   ├── config.py           # Env vars (N8N_URL, DATABASE_URL, OPENAI_API_KEY, ...)
@@ -111,6 +123,8 @@ proyecto-mia-rag-module/
 │   ├── query_engine.py     # Retrieval (PGVectorStore) + síntesis GPT-4o-mini + citación
 │   └── requirements.txt
 └── tests/
+    ├── conftest.py         # Env vars dummy para poder importar rag.config sin credenciales reales
+    ├── test_n8n_reader.py  # Tests de _latest_matches_by_pair (normalización de schemas)
     └── fixtures/           # Muestras reales de los dos schemas de resultados_match
         ├── resultados_match_entry_sample.json
         └── resultados_match_todos_los_resultados_raw_sample.json
@@ -122,8 +136,9 @@ proyecto-mia-rag-module/
   documentar como límite conocido.
 - Enriquecimiento histórico de scoring limitado a ~15% de las evaluaciones por inestabilidad
   de IDs internos en las N8N Data Tables entre recargas.
-- Sin tests automatizados aún — las fixtures en `tests/fixtures/` están listas para un test
-  unitario de la normalización de schemas en `n8n_reader.py`.
+- El caso `top_10_matches` (schema anidado) en `test_n8n_reader.py` es sintético — no se
+  capturó una muestra real de ese campo durante el debugging original, solo de
+  `todos_los_resultados`. Si aparece un caso real, reemplazar el fixture sintético.
 - Sin interfaz de consulta más allá del CLI (`python -m rag.query_engine`); una página nueva
   en el dashboard Streamlit del proyecto original sería la extensión natural.
 
