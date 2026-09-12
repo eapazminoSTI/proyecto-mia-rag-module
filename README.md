@@ -1,5 +1,7 @@
 # Módulo RAG — retrieval sobre leads indexados (Latinnova MIA)
 
+[![Tests](https://github.com/eapazminoSTI/proyecto-mia-rag-module/actions/workflows/tests.yml/badge.svg)](https://github.com/eapazminoSTI/proyecto-mia-rag-module/actions/workflows/tests.yml)
+
 > **Estado:** primera pieza de la rama de mejoras post-tesis (portafolio) del proyecto
 > [proyecto-mia-matching-pipeline](https://github.com/eapazminoSTI/proyecto-mia-matching-pipeline).
 > Añade retrieval semántico real con citación de fuente sobre los leads ya scrapeados por
@@ -129,6 +131,9 @@ Los tests no requieren N8N, Postgres ni OpenAI: cubren `_latest_matches_by_pair`
 (la normalización de los dos schemas de `resultados_match`, ver §4) usando las
 fixtures reales en `tests/fixtures/`.
 
+**CI:** corren automáticamente en cada push/PR vía GitHub Actions
+(`.github/workflows/tests.yml`) — ver el badge al inicio de este README.
+
 ### Interfaz Streamlit (`app.py`)
 
 App de una sola página para hacer consultas sin usar el CLI. Vive en este mismo
@@ -152,6 +157,9 @@ de similitud que simular.
 proyecto-mia-rag-module/
 ├── README.md
 ├── .gitignore
+├── .github/
+│   └── workflows/
+│       └── tests.yml    # CI: pytest en cada push/PR
 ├── pyproject.toml       # Empaquetado (pip install git+...)
 ├── requirements-dev.txt
 ├── requirements-app.txt # Dependencias de app.py (rag/requirements.txt + streamlit)
