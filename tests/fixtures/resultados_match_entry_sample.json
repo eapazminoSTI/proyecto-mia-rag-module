@@ -1,0 +1,11 @@
+{
+  "oportunidad_id": "33",
+  "consultor_id": "10",
+  "decision": "aplicar",
+  "score_match": 0.85,
+  "motivo": "Consultor con sólida experiencia en metodologías ágiles y transformación digital, altamente relevante para consultoría.",
+  "tipo_oportunidad": "consultoria",
+  "nombre_oportunidad": "",
+  "nombre_consultor": "",
+  "par_id": "33__10"
+}

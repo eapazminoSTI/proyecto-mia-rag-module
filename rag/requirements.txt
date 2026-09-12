@@ -1,0 +1,8 @@
+llama-index-core>=0.11.0
+llama-index-embeddings-openai>=0.2.0
+llama-index-llms-openai>=0.2.0
+llama-index-vector-stores-postgres>=0.2.0
+llama-index-storage-docstore-postgres>=0.2.0
+psycopg2-binary>=2.9.9
+requests>=2.31.0
+python-dotenv>=1.0.0
