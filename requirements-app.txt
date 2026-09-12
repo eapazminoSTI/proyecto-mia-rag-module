@@ -1,2 +1,2 @@
--r rag/requirements.txt
+-e .
 streamlit>=1.32.0

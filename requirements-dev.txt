@@ -1,2 +1,2 @@
--r rag/requirements.txt
+-e .
 pytest>=8.0.0
