@@ -94,6 +94,25 @@ python -m rag.ingest          # sincroniza N8N → pgvector (incremental)
 python -m rag.query_engine "Consultor senior en transformación digital"
 ```
 
+### Instalación como paquete (para el dashboard u otros proyectos)
+
+Este repo se puede instalar directamente con pip (usa `pyproject.toml`, no necesita
+clonarse aparte):
+
+```bash
+pip install git+https://github.com/eapazminoSTI/proyecto-mia-rag-module.git@master
+```
+
+```python
+from rag.query_engine import query
+resultado = query("Consultor senior en transformación digital")
+```
+
+El consumidor debe proveer las mismas variables de entorno de la sección anterior
+(`N8N_URL`/`N8N_API_KEY`, `DATABASE_URL`, `OPENAI_API_KEY`) antes de importar `rag.config`
+— se leen con `os.environ[...]` al importar el paquete, sin valores por defecto para las
+credenciales.
+
 `rag/schema.sql` solo habilita la extensión `pgvector` (`CREATE EXTENSION IF NOT EXISTS vector`) —
 las tablas del vector store y del docstore las crea LlamaIndex automáticamente en el primer `ingest`.
 
@@ -114,6 +133,7 @@ fixtures reales en `tests/fixtures/`.
 proyecto-mia-rag-module/
 ├── README.md
 ├── .gitignore
+├── pyproject.toml       # Empaquetado (pip install git+...)
 ├── requirements-dev.txt
 ├── rag/
 │   ├── schema.sql          # Bootstrap: CREATE EXTENSION vector
