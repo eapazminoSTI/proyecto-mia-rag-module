@@ -65,34 +65,56 @@ def test_flat_schema_produces_one_entry_per_unique_pair(flat_schema_row, flat_sc
     assert set(latest.keys()) == expected_pairs
 
 
-def test_nested_schema_top_10_matches_is_normalized():
-    # No se capturó una muestra real de `top_10_matches` durante el debugging
-    # (solo se guardó el raw de `todos_los_resultados`); este caso reproduce el
-    # schema anidado documentado en README.md §4 (ids.consultor/ids.oportunidad,
-    # score/tipo sin sufijo) para cubrir la otra rama del parser.
-    row = {
-        "fecha_ejecucion": "2026-04-20T00:00:00Z",
+@pytest.fixture
+def nested_schema_row() -> dict:
+    """Fila real de `resultados_match` (id=1, fecha_ejecucion original
+    2026-04-06T01:52:45.428Z) capturada de la instancia N8N del proyecto original:
+    `top_10_matches` es un string JSON con 10 entradas en el schema anidado
+    (ids.consultor/ids.oportunidad, score/tipo sin sufijo, sin campo `decision`)."""
+    sample = _load_fixture("resultados_match_top_10_matches_raw_sample.json")
+    return {
+        "fecha_ejecucion": "2026-04-06T01:52:45.428Z",
         "todos_los_resultados": None,
-        "top_10_matches": json.dumps([
-            {
-                "ids": {"consultor": "7", "oportunidad": "42"},
-                "score": 0.91,
-                "tipo": "colaboracion",
-                "decision": "aplicar",
-                "motivo": "Alta afinidad temática.",
-            }
-        ]),
+        "top_10_matches": sample["top_10_matches_raw"],
     }
 
-    latest = _latest_matches_by_pair([row])
 
-    assert latest[("7", "42")] == {
-        "score": 0.91,
-        "tipo": "colaboracion",
-        "decision": "aplicar",
-        "motivo": "Alta afinidad temática.",
-        "fecha_ejecucion": "2026-04-20T00:00:00Z",
+@pytest.fixture
+def nested_schema_entries() -> list[dict]:
+    sample = _load_fixture("resultados_match_top_10_matches_raw_sample.json")
+    return json.loads(sample["top_10_matches_raw"])
+
+
+def test_first_captured_top10_entry_matches_standalone_sample(nested_schema_entries):
+    # resultados_match_top_10_matches_entry_sample.json es la primera entrada de
+    # resultados_match_top_10_matches_raw_sample.json, guardada aparte al capturar
+    # esta fixture. Si esto falla, las dos fixtures se desincronizaron.
+    assert nested_schema_entries[0] == _load_fixture("resultados_match_top_10_matches_entry_sample.json")
+
+
+def test_nested_schema_normalizes_real_captured_run(nested_schema_row):
+    latest = _latest_matches_by_pair([nested_schema_row])
+
+    entry = latest[("10", "33")]
+    assert entry == {
+        "score": 0.85,
+        "tipo": "consultoria",
+        "decision": None,  # top_10_matches real no trae campo `decision` (solo todos_los_resultados)
+        "motivo": (
+            "Consultor con sólida experiencia en metodologías ágiles y "
+            "transformación digital, altamente relevante para consultoría."
+        ),
+        "fecha_ejecucion": "2026-04-06T01:52:45.428Z",
     }
+
+
+def test_nested_schema_produces_one_entry_per_unique_pair(nested_schema_row, nested_schema_entries):
+    latest = _latest_matches_by_pair([nested_schema_row])
+
+    expected_pairs = {
+        (e["ids"]["consultor"], e["ids"]["oportunidad"]) for e in nested_schema_entries
+    }
+    assert set(latest.keys()) == expected_pairs
 
 
 def test_later_run_overwrites_earlier_run_for_same_pair():

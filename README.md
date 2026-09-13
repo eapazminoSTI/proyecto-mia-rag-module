@@ -176,7 +176,9 @@ proyecto-mia-rag-module/
     ├── test_n8n_reader.py  # Tests de _latest_matches_by_pair (normalización de schemas)
     └── fixtures/           # Muestras reales de los dos schemas de resultados_match
         ├── resultados_match_entry_sample.json
-        └── resultados_match_todos_los_resultados_raw_sample.json
+        ├── resultados_match_todos_los_resultados_raw_sample.json
+        ├── resultados_match_top_10_matches_entry_sample.json
+        └── resultados_match_top_10_matches_raw_sample.json
 ```
 
 ## 8. Pendientes conocidos
@@ -185,9 +187,6 @@ proyecto-mia-rag-module/
   documentar como límite conocido.
 - Enriquecimiento histórico de scoring limitado a ~15% de las evaluaciones por inestabilidad
   de IDs internos en las N8N Data Tables entre recargas.
-- El caso `top_10_matches` (schema anidado) en `test_n8n_reader.py` es sintético — no se
-  capturó una muestra real de ese campo durante el debugging original, solo de
-  `todos_los_resultados`. Si aparece un caso real, reemplazar el fixture sintético.
 - `app.py` es independiente a propósito (no está integrada al dashboard del proyecto
   original) para no mezclar el historial de git de ambos repos — ver nota en la
   cabecera de este README.
