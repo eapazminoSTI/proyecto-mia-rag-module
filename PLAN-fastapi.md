@@ -66,7 +66,7 @@ Nueva sección "API REST":
 ## 7. Verificación
 
 - [x] `pytest tests/ -v` local en verde
-- [ ] CI verde en GitHub
+- [x] CI verde en GitHub
 - [x] `docker compose up api` con claves dummy → `/health` 200 y `/docs` carga
 - [ ] **Opcional (gasta tokens OpenAI, pedir confirmación):** `/query` real — requiere
       haber corrido antes `docker compose --profile ingest run ingest` con claves reales
