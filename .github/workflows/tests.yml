@@ -19,3 +19,17 @@ jobs:
 
       - name: Correr tests
         run: pytest tests/ -v
+
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Construir imagen Docker
+        run: docker build -t latinnova-rag:ci .
+
+      - name: Validar docker-compose.yml
+        run: docker compose config -q
+        env:
+          N8N_API_KEY: dummy
+          OPENAI_API_KEY: dummy

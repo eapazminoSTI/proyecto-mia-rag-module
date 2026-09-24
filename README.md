@@ -81,6 +81,27 @@ Postgres+pgvector de prueba y la API de OpenAI:
 
 ## 6. Cómo correr localmente
 
+### Con Docker (recomendado)
+
+`docker-compose.yml` levanta todo el stack sin instalar Python ni Postgres localmente:
+
+- `db` — Postgres 16 + pgvector (`pgvector/pgvector:pg16`); `rag/schema.sql` se ejecuta
+  al crear el volumen y habilita la extensión `vector`. Tiene healthcheck (`pg_isready`).
+- `app` — la interfaz Streamlit (`Dockerfile`, `python:3.11-slim`), que arranca solo
+  cuando `db` reporta healthy. Healthcheck contra `/_stcore/health`.
+- `ingest` — ejecuta `python -m rag.ingest` bajo demanda (perfil `ingest`, no arranca con `up`).
+
+```bash
+cp .env.example .env          # completar N8N_API_KEY y OPENAI_API_KEY
+docker compose up -d --build  # db + app → http://localhost:8501
+docker compose --profile ingest run --rm ingest   # sincroniza N8N → pgvector
+```
+
+`DATABASE_URL` no se define en `.env`: el compose la arma apuntando al servicio `db`.
+`N8N_URL` usa `host.docker.internal` por defecto para alcanzar un N8N corriendo en el host.
+
+### Sin Docker
+
 Variables de entorno requeridas (`rag/.env`, no versionar):
 
 ```bash
@@ -132,7 +153,8 @@ Los tests no requieren N8N, Postgres ni OpenAI: cubren `_latest_matches_by_pair`
 fixtures reales en `tests/fixtures/`.
 
 **CI:** corren automáticamente en cada push/PR vía GitHub Actions
-(`.github/workflows/tests.yml`) — ver el badge al inicio de este README.
+(`.github/workflows/tests.yml`) — ver el badge al inicio de este README. El mismo
+workflow construye la imagen Docker (`docker build`) para detectar si el `Dockerfile` se rompe.
 
 ### Interfaz Streamlit (`app.py`)
 
@@ -157,9 +179,13 @@ de similitud que simular.
 proyecto-mia-rag-module/
 ├── README.md
 ├── .gitignore
+├── .dockerignore
+├── .env.example         # Plantilla de variables para docker compose
+├── Dockerfile           # Imagen de app.py (python:3.11-slim + healthcheck)
+├── docker-compose.yml   # db (Postgres+pgvector) + app (Streamlit) + ingest (bajo demanda)
 ├── .github/
 │   └── workflows/
-│       └── tests.yml    # CI: pytest en cada push/PR
+│       └── tests.yml    # CI: pytest + docker build en cada push/PR
 ├── pyproject.toml       # Empaquetado (pip install git+...)
 ├── requirements-dev.txt
 ├── requirements-app.txt # Dependencias de app.py (rag/requirements.txt + streamlit)
