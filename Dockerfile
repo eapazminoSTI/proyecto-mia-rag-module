@@ -7,18 +7,20 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1
 
 # Copiamos primero los manifiestos de dependencias para aprovechar la cache de capas
-COPY pyproject.toml requirements-app.txt ./
+COPY pyproject.toml requirements-app.txt requirements-api.txt ./
 COPY rag/requirements.txt rag/requirements.txt
 
-# requirements-app.txt instala `-e .` (paquete rag/ vía pyproject.toml) + streamlit.
+# requirements-app.txt instala `-e .` (paquete rag/ vía pyproject.toml) + streamlit, y
+# requirements-api.txt agrega fastapi + uvicorn: la misma imagen sirve a los servicios
+# `app` (Streamlit) y `api` (FastAPI).
 # psycopg2-binary trae wheels precompilados para linux/amd64 y linux/arm64, no requiere
 # libpq-dev ni build-essential en la imagen.
 COPY rag/ rag/
-RUN pip install --no-cache-dir -r requirements-app.txt
+RUN pip install --no-cache-dir -r requirements-app.txt -r requirements-api.txt
 
 COPY app.py ./
 
-EXPOSE 8501
+EXPOSE 8501 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health')" || exit 1
