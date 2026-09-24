@@ -1,3 +1,4 @@
+import functools
 import sys
 
 from llama_index.core import VectorStoreIndex
@@ -24,6 +25,9 @@ recomiendes, cita explícitamente su número [Lead N] y explica el motivo basán
 lead y, si existe, el historial de scoring. Si ningún lead es un buen match, dilo directamente."""
 
 
+# Se construye una sola vez por proceso (API/Streamlit) en vez de en cada consulta. El índice
+# solo apunta a la tabla de pgvector, así que sigue viendo los leads que agregue `rag.ingest`.
+@functools.lru_cache(maxsize=1)
 def _build_index() -> VectorStoreIndex:
     db = config.parsed_database_url()
     vector_store = PGVectorStore.from_params(
