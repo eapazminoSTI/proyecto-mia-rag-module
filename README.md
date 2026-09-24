@@ -89,11 +89,13 @@ Postgres+pgvector de prueba y la API de OpenAI:
   al crear el volumen y habilita la extensión `vector`. Tiene healthcheck (`pg_isready`).
 - `app` — la interfaz Streamlit (`Dockerfile`, `python:3.11-slim`), que arranca solo
   cuando `db` reporta healthy. Healthcheck contra `/_stcore/health`.
+- `api` — la API REST FastAPI (`rag/api.py`, misma imagen), en `http://localhost:8000`.
+  Healthcheck contra `/health` (hace `SELECT 1` en Postgres).
 - `ingest` — ejecuta `python -m rag.ingest` bajo demanda (perfil `ingest`, no arranca con `up`).
 
 ```bash
 cp .env.example .env          # completar N8N_API_KEY y OPENAI_API_KEY
-docker compose up -d --build  # db + app → http://localhost:8501
+docker compose up -d --build  # db + app → http://localhost:8501, api → http://localhost:8000
 docker compose --profile ingest run --rm ingest   # sincroniza N8N → pgvector
 ```
 
@@ -150,7 +152,8 @@ pytest tests/
 
 Los tests no requieren N8N, Postgres ni OpenAI: cubren `_latest_matches_by_pair`
 (la normalización de los dos schemas de `resultados_match`, ver §4) usando las
-fixtures reales en `tests/fixtures/`.
+fixtures reales en `tests/fixtures/`, y los endpoints de `rag/api.py` con
+`query_engine.query` reemplazado por un doble de prueba.
 
 **CI:** corren automáticamente en cada push/PR vía GitHub Actions
 (`.github/workflows/tests.yml`) — ver el badge al inicio de este README. El mismo
@@ -173,6 +176,35 @@ este repo), la app muestra qué variables faltan y no ofrece un formulario — n
 modo demo, igual que `rag.query_engine`: sin un índice real poblado no hay resultados
 de similitud que simular.
 
+### API REST (`rag/api.py`, FastAPI)
+
+Expone la misma consulta que `app.py` y el CLI por HTTP, para que otros servicios
+(p. ej. un workflow N8N con un nodo HTTP Request) consulten el índice sin importar Python.
+No reemplaza a Streamlit: ambas reutilizan `rag.query_engine.query()` tal cual.
+
+```bash
+docker compose up -d api      # levanta db + api
+# o sin Docker:
+pip install -r requirements-api.txt
+uvicorn rag.api:app --reload --port 8000
+```
+
+Documentación interactiva (Swagger): http://localhost:8000/docs
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| `GET` | `/health` | `SELECT 1` contra Postgres (sin llamar a OpenAI) — `503` si la DB no responde |
+| `POST` | `/query` | Body `{"perfil": str, "top_k": int (1–10, por defecto 5)}` → `{"answer", "citations"}` |
+
+```bash
+curl -X POST http://localhost:8000/query -H "Content-Type: application/json"   -d '{"perfil": "Consultor senior en transformación digital", "top_k": 5}'
+```
+
+Errores: `422` si `perfil` está vacío o `top_k` fuera de rango; `503` si falla el motor
+RAG (Postgres, OpenAI). Igual que `rag.query_engine`, requiere las variables de entorno
+de la sección anterior al arrancar. La ingesta **no** se expone por HTTP a propósito
+(reembebe vía OpenAI con costo) — sigue siendo `python -m rag.ingest`.
+
 ## 7. Estructura del repositorio
 
 ```
@@ -181,14 +213,15 @@ proyecto-mia-rag-module/
 ├── .gitignore
 ├── .dockerignore
 ├── .env.example         # Plantilla de variables para docker compose
-├── Dockerfile           # Imagen de app.py (python:3.11-slim + healthcheck)
-├── docker-compose.yml   # db (Postgres+pgvector) + app (Streamlit) + ingest (bajo demanda)
+├── Dockerfile           # Imagen de app.py y rag/api.py (python:3.11-slim + healthcheck)
+├── docker-compose.yml   # db (Postgres+pgvector) + app (Streamlit) + api (FastAPI) + ingest (bajo demanda)
 ├── .github/
 │   └── workflows/
 │       └── tests.yml    # CI: pytest + docker build en cada push/PR
 ├── pyproject.toml       # Empaquetado (pip install git+...)
 ├── requirements-dev.txt
-├── requirements-app.txt # Dependencias de app.py (rag/requirements.txt + streamlit)
+├── requirements-app.txt # Dependencias de app.py (-e . + streamlit)
+├── requirements-api.txt # Dependencias de rag/api.py (-e . + fastapi + uvicorn)
 ├── app.py               # Interfaz Streamlit de una sola página (independiente)
 ├── rag/
 │   ├── schema.sql          # Bootstrap: CREATE EXTENSION vector
@@ -196,10 +229,12 @@ proyecto-mia-rag-module/
 │   ├── n8n_reader.py       # N8N Data Tables API → LlamaIndex Document[]
 │   ├── ingest.py           # IngestionPipeline (LlamaIndex): embeddings + upsert incremental
 │   ├── query_engine.py     # Retrieval (PGVectorStore) + síntesis GPT-4o-mini + citación
+│   ├── api.py              # API REST FastAPI: GET /health, POST /query
 │   └── requirements.txt
 └── tests/
     ├── conftest.py         # Env vars dummy para poder importar rag.config sin credenciales reales
     ├── test_n8n_reader.py  # Tests de _latest_matches_by_pair (normalización de schemas)
+    ├── test_api.py         # Tests de los endpoints FastAPI (sin N8N/Postgres/OpenAI)
     └── fixtures/           # Muestras reales de los dos schemas de resultados_match
         ├── resultados_match_entry_sample.json
         ├── resultados_match_todos_los_resultados_raw_sample.json
