@@ -18,5 +18,13 @@ dependencies = [
     "python-dotenv>=1.0.0",
 ]
 
-[tool.setuptools]
-packages = ["rag"]
+[project.optional-dependencies]
+agent = [
+    "langgraph>=1.2.16",
+    "langchain-openai>=1.7.2",
+]
+
+# Descubrimiento automático: el Dockerfile solo copia rag/, así que una lista fija
+# con "agent" rompería `pip install -e .` dentro de la imagen.
+[tool.setuptools.packages.find]
+include = ["rag*", "agent*"]
