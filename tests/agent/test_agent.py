@@ -5,6 +5,7 @@ from langgraph.types import Command
 from agent.deps import Deps
 from agent.graph import build_graph
 from agent.nodes import armar_shortlist
+from agent.run import main
 from agent.state import Criterios, Evaluacion, Evaluaciones, Lead
 
 SOLICITUD = {"solicitud": "oportunidades para María, evaluación de impacto"}
@@ -100,3 +101,14 @@ def test_shortlist_descarta_indices_invalidos_y_duplicados():
     shortlist = armar_shortlist({"leads": leads, "evaluaciones": evaluaciones})
 
     assert [(item["oportunidad_id"], item["razon"]) for item in shortlist] == [("1", "ok"), ("0", "ok")]
+
+
+def test_cli_insiste_hasta_respuesta_valida_y_aprueba(tmp_path, capsys):
+    deps, _ = fake_deps(tmp_path, [[8, 7, 2]])
+    respuestas = iter(["quizás", "a"])
+    r = main(["evaluación", "de", "impacto", "--thread-id", "cli"], deps=deps, input_fn=lambda _: next(respuestas))
+
+    assert r["archivo"] == str(tmp_path / "cli.json")
+    salida = capsys.readouterr().out
+    assert "Shortlist (2)" in salida
+    assert "Responde 'a' (aprobar) o 'r' (rechazar)." in salida
