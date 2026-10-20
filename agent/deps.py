@@ -42,6 +42,18 @@ def listar_leads(leads: list[Lead]) -> str:
     )
 
 
+COMILLAS = "\"'“”‘’«»`"
+
+
+def limpiar_consulta(texto: str) -> str:
+    """Deja solo la consulta: el LLM a veces la envuelve en comillas o le antepone "Consulta:"."""
+    lineas = [linea.strip() for linea in texto.strip().splitlines() if linea.strip()]
+    consulta = lineas[0] if lineas else ""
+    if consulta.lower().startswith("consulta:"):
+        consulta = consulta[len("consulta:"):].strip()
+    return consulta.strip(COMILLAS).strip()
+
+
 def deps_reales() -> Deps:
     # Imports diferidos: rag.config exige variables de entorno al importarse.
     from langchain_openai import ChatOpenAI
@@ -72,11 +84,15 @@ def deps_reales() -> Deps:
         )
 
     def reformular(consulta: str, perfil: str) -> str:
+        # Sin pedir explícitamente que sea más corta, el LLM tiende a agregar términos en cada
+        # ronda y la consulta se vuelve más específica en vez de más amplia.
         respuesta = llm.invoke(
-            f"La búsqueda '{consulta}' dio pocos resultados buenos para el perfil '{perfil}'. "
-            "Propón UNA consulta alternativa más amplia. Responde solo con la consulta."
+            f"La búsqueda semántica «{consulta}» encontró pocas oportunidades con buen encaje "
+            f"para el perfil «{perfil}». Propón UNA consulta alternativa MÁS GENERAL: más corta "
+            "que la anterior (máximo 8 palabras), con términos amplios del área en lugar de "
+            "agregar detalles. Responde solo con la consulta, sin comillas ni explicaciones."
         )
-        return respuesta.content.strip()
+        return limpiar_consulta(respuesta.content)
 
     def buscar(consulta: str) -> list[Lead]:
         nodes = _build_index().as_retriever(similarity_top_k=TOP_K).retrieve(consulta)

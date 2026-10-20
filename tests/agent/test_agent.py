@@ -2,7 +2,7 @@ import json
 
 from langgraph.types import Command
 
-from agent.deps import Deps
+from agent.deps import Deps, limpiar_consulta
 from agent.graph import build_graph
 from agent.nodes import armar_shortlist
 from agent.run import main
@@ -84,10 +84,39 @@ def test_tope_de_reformulaciones(tmp_path):
     deps, consultas = fake_deps(tmp_path, [[2, 3, 1]] * 3)
     r = build_graph(deps).invoke(SOLICITUD, config())
 
-    # 1 búsqueda inicial + MAX_INTENTOS reformulaciones; después pasa a revisión aunque no haya buenos.
+    # 1 búsqueda inicial + MAX_INTENTOS reformulaciones; sin ningún lead bueno termina sin
+    # pasar por revisión humana ni escribir archivo.
     assert len(consultas) == 3
     assert r["intentos"] == 2
-    assert r["__interrupt__"][0].value["shortlist"] == []
+    assert "__interrupt__" not in r
+    assert "decision" not in r
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_tope_con_un_solo_bueno_pasa_a_revision(tmp_path):
+    deps, consultas = fake_deps(tmp_path, [[8, 3, 1]] * 3)
+    r = build_graph(deps).invoke(SOLICITUD, config())
+
+    assert len(consultas) == 3
+    assert len(r["__interrupt__"][0].value["shortlist"]) == 1
+
+
+def test_cli_sin_buenos_no_pide_revision(tmp_path, capsys):
+    deps, _ = fake_deps(tmp_path, [[2, 3, 1]] * 3)
+
+    def no_preguntar(_):
+        raise AssertionError("no debería pedir revisión")
+
+    main(["algo", "--thread-id", "vacio"], deps=deps, input_fn=no_preguntar)
+    assert "Ninguna oportunidad llegó al umbral" in capsys.readouterr().out
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_limpiar_consulta():
+    assert limpiar_consulta('"ciberseguridad industrial"') == "ciberseguridad industrial"
+    assert limpiar_consulta("'seguridad OT'\n") == "seguridad OT"
+    assert limpiar_consulta("Consulta: «gestión de proyectos»") == "gestión de proyectos"
+    assert limpiar_consulta("evaluación de impacto\n\nExplicación: más amplia") == "evaluación de impacto"
 
 
 def test_shortlist_descarta_indices_invalidos_y_duplicados():

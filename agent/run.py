@@ -56,6 +56,9 @@ def main(argv=None, deps=None, input_fn=input) -> dict:
 
     if resultado.get("archivo"):
         print(f"\nShortlist guardada en {resultado['archivo']}")
+    elif "decision" not in resultado:
+        print(f"\nConsulta usada: {resultado['criterios'].consulta}")
+        print("Ninguna oportunidad llegó al umbral de encaje: no hubo nada que revisar ni se guardó nada.")
     else:
         print("\nRechazado: no se guardó nada.")
     return resultado

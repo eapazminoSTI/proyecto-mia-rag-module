@@ -2,6 +2,7 @@ import json
 import os
 
 from langchain_core.runnables import RunnableConfig
+from langgraph.graph import END
 from langgraph.types import interrupt
 
 from agent.deps import Deps
@@ -85,6 +86,10 @@ def make_nodes(deps: Deps) -> dict:
 
 
 def ruta_tras_evaluar(state: AgentState) -> str:
-    if len(armar_shortlist(state)) < MIN_BUENOS and state.get("intentos", 0) < MAX_INTENTOS:
+    buenos = len(armar_shortlist(state))
+    if buenos < MIN_BUENOS and state.get("intentos", 0) < MAX_INTENTOS:
         return "reformular_consulta"
+    # Agotados los reintentos sin ningún lead sobre el umbral: no hay nada que revisar ni publicar.
+    if buenos == 0:
+        return END
     return "revision_humana"

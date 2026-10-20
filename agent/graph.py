@@ -24,7 +24,7 @@ def build_graph(deps: Deps, checkpointer=None):
     g.add_edge("buscar_oportunidades", "evaluar_encaje")
     # Ciclo con límite: si hay pocos leads buenos, reformula y vuelve a buscar.
     g.add_conditional_edges("evaluar_encaje", ruta_tras_evaluar,
-                            ["reformular_consulta", "revision_humana"])
+                            ["reformular_consulta", "revision_humana", END])
     g.add_edge("reformular_consulta", "buscar_oportunidades")
     g.add_edge("revision_humana", "publicar")
     g.add_edge("publicar", END)
