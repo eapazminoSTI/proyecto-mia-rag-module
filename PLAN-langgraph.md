@@ -52,6 +52,7 @@ START
 [3] evaluar_encaje ───────── LLM (salida estructurada) → score 0-10 + razón por lead
   │
   ├── ¿< 2 leads con score ≥ 6 y intentos < 2? ──► [4] reformular_consulta ──► [2]
+  ├── ¿0 leads con score ≥ 6 tras los reintentos? ──► END (sin revisión ni archivo; agregado 2026-10-20)
   ▼
 [5] revision_humana ──────── interrupt() ⏸  aprobar / rechazar
   │

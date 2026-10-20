@@ -153,7 +153,9 @@ pytest tests/
 Los tests no requieren N8N, Postgres ni OpenAI: cubren `_latest_matches_by_pair`
 (la normalización de los dos schemas de `resultados_match`, ver §4) usando las
 fixtures reales en `tests/fixtures/`, y los endpoints de `rag/api.py` con
-`query_engine.query` reemplazado por un doble de prueba.
+`query_engine.query` reemplazado por un doble de prueba. Los de `tests/agent/` corren el
+grafo LangGraph completo (pausa, aprobar/rechazar, ciclo de reformulación y su tope) con
+LLM y buscador simulados.
 
 **CI:** corren automáticamente en cada push/PR vía GitHub Actions
 (`.github/workflows/tests.yml`) — ver el badge al inicio de este README. El mismo
@@ -205,7 +207,93 @@ RAG (Postgres, OpenAI). Igual que `rag.query_engine`, requiere las variables de 
 de la sección anterior al arrancar. La ingesta **no** se expone por HTTP a propósito
 (reembebe vía OpenAI con costo) — sigue siendo `python -m rag.ingest`.
 
-## 7. Estructura del repositorio
+## 7. Agente LangGraph (fase 1)
+
+Agente sobre el motor RAG de este repo: interpreta una solicitud en lenguaje natural, busca
+leads, los puntúa contra el perfil, reformula la búsqueda si hay pocos buenos y **pausa para
+que una persona apruebe** la shortlist antes de publicarla. Vive en `agent/`, al lado de `rag/`,
+sin modificarlo: solo importa `_build_index` y `_citation` de `rag.query_engine`. El plan
+completo y las decisiones de diseño están en `PLAN-langgraph.md`.
+
+```mermaid
+graph TD;
+	__start__([START]) --> interpretar_solicitud;
+	interpretar_solicitud["interpretar_solicitud<br/><small>LLM → criterios + consulta</small>"] --> buscar_oportunidades;
+	buscar_oportunidades["buscar_oportunidades<br/><small>retriever pgvector, top-5</small>"] --> evaluar_encaje;
+	evaluar_encaje["evaluar_encaje<br/><small>LLM → score 0-10 + razón</small>"] -.->|"&lt; 2 buenos y intentos &lt; 2"| reformular_consulta;
+	reformular_consulta["reformular_consulta<br/><small>LLM → consulta más general</small>"] --> buscar_oportunidades;
+	evaluar_encaje -.->|"≥ 1 bueno"| revision_humana;
+	evaluar_encaje -.->|"0 buenos tras 2 reintentos"| __end__;
+	revision_humana["revision_humana<br/><small>interrupt() ⏸ aprobar / rechazar</small>"] --> publicar;
+	publicar["publicar<br/><small>output/shortlists/{thread_id}.json</small>"] --> __end__([END]);
+```
+
+"Bueno" = lead con score ≥ 6 (`UMBRAL`, `MIN_BUENOS` y `MAX_INTENTOS` en `agent/nodes.py`).
+
+**Conceptos de LangGraph que usa:** estado tipado (`TypedDict` + modelos Pydantic), arista
+condicional con ciclo acotado, human-in-the-loop con `interrupt()` + `Command(resume=...)`,
+checkpointer (`InMemorySaver`) con `thread_id`, y salida estructurada (`with_structured_output`).
+Los nodos reciben sus dependencias (LLM y buscador) inyectadas en un objeto `Deps`
+(`agent/deps.py`), así que los tests corren con fakes deterministas sin gastar tokens.
+
+### Cómo correrlo
+
+Requiere el extra `[agent]` (LangGraph no entra en la imagen Docker), Postgres con los leads
+ya ingeridos (§6) y `OPENAI_API_KEY`:
+
+```bash
+pip install -e ".[agent]"
+docker compose up -d db
+# DATABASE_URL apunta al Postgres del compose expuesto en el host
+DATABASE_URL=postgresql://rag:rag@localhost:5432/rag \
+  python -m agent.run "oportunidades para una consultora en evaluación de impacto"
+```
+
+El CLI muestra la shortlist y pregunta `¿Aprobar o rechazar? [a/r]`. Al aprobar escribe
+`output/shortlists/{thread_id}.json` (ignorado por git) con la solicitud, la consulta final y
+cada lead con su texto, autor, `post_url`, score y razón. Costo por corrida: centavos con
+`gpt-4o-mini`.
+
+### Prueba manual contra el RAG real (2026-10-20)
+
+Cuatro solicitudes contra los 53 leads ingeridos:
+
+| Solicitud | Reformulaciones | Shortlist (score ≥ 6) | Resultado |
+|---|---|---|---|
+| Consultor senior en transformación digital y metodologías ágiles | 0 | 2 | IICA Ecuador (8), VVOB Ecuador (7) |
+| Consultora en evaluación de impacto | 0 | 2 | ConQuito – empleabilidad (9), HIAS – inclusión económica (8) |
+| Consultorías en finanzas públicas para un economista | 0 | 3 | HIAS (8), ConQuito (7), HIAS – analista de programas **sin URL** (6) |
+| Especialista en ciberseguridad industrial con certificación OT | 2 (tope) | 0 | Termina sin revisión humana: no hay leads de ese dominio |
+
+Observaciones:
+
+- El flujo completo funciona: ciclo de reformulación, tope de reintentos, pausa y publicación.
+- Con 53 leads los resultados se **repiten**: "evaluación de impacto" y "finanzas públicas"
+  devolvieron casi los mismos dos leads.
+- El evaluador es **generoso**: en "finanzas públicas" le dio 8 a un lead justificándolo con
+  "políticas públicas", algo que el texto del lead no menciona. La revisión humana existe
+  justamente para esto.
+- La primera versión del reformulador hacía la consulta **más larga** en cada ronda (y dejaba
+  comillas literales); se corrigió el prompt para pedir una consulta más corta y general.
+
+### Limitaciones
+
+- **Checkpointer en memoria:** la pausa y la decisión ocurren en el mismo proceso; un hilo
+  pausado se pierde al reiniciar.
+- **Corpus chico** (53 leads, ~30% sin `post_url`): muchas solicitudes no tienen ningún lead
+  afín, y los que no tienen URL pueden entrar a la shortlist.
+- **El reformulador solo ve la última consulta:** puede repetir la misma consulta en dos
+  rondas seguidas y gastar una búsqueda en vano.
+- **Sin evaluación formal de calidad** de los scores: solo la prueba manual de arriba.
+- Sin API ni servicio Docker para el agente todavía.
+
+### Próximos pasos
+
+- `PostgresSaver` para persistir hilos pausados entre procesos.
+- Endpoints FastAPI `/agent/run` y `/agent/resume`.
+- Webhook de N8N como acción de `publicar`.
+
+## 8. Estructura del repositorio
 
 ```
 proyecto-mia-rag-module/
@@ -231,7 +319,15 @@ proyecto-mia-rag-module/
 │   ├── query_engine.py     # Retrieval (PGVectorStore) + síntesis GPT-4o-mini + citación
 │   ├── api.py              # API REST FastAPI: GET /health, POST /query
 │   └── requirements.txt
+├── agent/               # Agente LangGraph (§7), extra opcional [agent]
+│   ├── state.py            # AgentState + modelos Pydantic (Criterios, Lead, Evaluacion)
+│   ├── deps.py             # Deps inyectables + implementaciones reales (OpenAI + retriever RAG)
+│   ├── nodes.py            # Los 6 nodos y la ruta condicional tras evaluar
+│   ├── graph.py            # build_graph(deps, checkpointer)
+│   └── run.py              # CLI: python -m agent.run "..."
+├── PLAN-langgraph.md    # Plan y decisiones del agente
 └── tests/
+    ├── agent/              # Tests del grafo con LLM y RAG simulados (sin __init__.py)
     ├── conftest.py         # Env vars dummy para poder importar rag.config sin credenciales reales
     ├── test_n8n_reader.py  # Tests de _latest_matches_by_pair (normalización de schemas)
     ├── test_api.py         # Tests de los endpoints FastAPI (sin N8N/Postgres/OpenAI)
@@ -242,7 +338,7 @@ proyecto-mia-rag-module/
         └── resultados_match_top_10_matches_raw_sample.json
 ```
 
-## 8. Pendientes conocidos
+## 9. Pendientes conocidos
 
 - Cobertura de `post_url` al 70% — evaluar si ampliar en el pipeline original (WF2/WF3) o
   documentar como límite conocido.
